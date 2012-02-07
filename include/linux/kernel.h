@@ -1,6 +1,8 @@
 #ifndef _LINUX_KERNEL_H
 #define _LINUX_KERNEL_H
 
+#include <linux/sysinfo.h>
+
 /*
  * 'kernel.h' contains some often-used function prototypes etc
  */
@@ -755,5 +757,6 @@ extern int __build_bug_on_failed;
 
 /* To identify board information in panic logs, set this */
 extern char *mach_panic_string;
+extern int do_sysinfo(struct sysinfo *info);
 
 #endif
