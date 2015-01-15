@@ -18,6 +18,12 @@ fi
 
 busybox cpio -i < ${load_image}
 
+if busybox grep -q bootmode=2 /proc/cmdline ; then
+       busybox insmod /modules/j4fs.ko
+       busybox insmod /modules/param.ko
+       busybox mount -t j4fs /dev/block/mmcblk0p1 /mnt/.lfs
+fi
+
 busybox umount /sys
 busybox umount /proc
 busybox date >>boot.txt
