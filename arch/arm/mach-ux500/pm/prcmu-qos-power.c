@@ -519,6 +519,7 @@ out:
 	mutex_unlock(&prcmu_qos_mutex);
 	return ret;
 }
+EXPORT_SYMBOL(prcmu_qos_lpa_override);
 
 void prcmu_qos_voice_call_override(bool enable)
 {

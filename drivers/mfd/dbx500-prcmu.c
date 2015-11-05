@@ -438,6 +438,7 @@ int  prcmu_abb_write(u8 slave, u8 reg, u8 *value, u8 size)
 {
 	return dbx500_prcmu_context.pprobe->abb_write(slave, reg, value, size);
 }
+EXPORT_SYMBOL(prcmu_abb_write);
 
 int  prcmu_abb_write_masked(u8 slave, u8 reg, u8 *value,
 		u8 *mask, u8 size)

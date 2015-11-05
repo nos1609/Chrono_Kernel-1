@@ -50,7 +50,9 @@ module_param(hid_keyboard_enable, uint, 0644);
 #include "epautoconf.c"
 #include "composite.c"
 
+#ifdef CONFIG_USB_AUDIO
 #include "f_audio_source.c"
+#endif
 #include "f_mass_storage.c"
 #include "u_serial.c"
 #ifdef CONFIG_USB_DUN_SUPPORT
@@ -866,6 +868,7 @@ static struct android_usb_function mass_storage_function = {
 	.attributes	= mass_storage_function_attributes,
 };
 
+#ifdef CONFIG_USB_AUDIO
 static int audio_source_function_init(struct android_usb_function *f,
 			struct usb_composite_dev *cdev)
 {
@@ -927,6 +930,7 @@ static struct android_usb_function audio_source_function = {
 	.unbind_config	= audio_source_function_unbind_config,
 	.attributes	= audio_source_function_attributes,
 };
+#endif
 
 #if defined(CONFIG_USB_ANDROID_PHONET)
 static int phonet_function_init(struct android_usb_function *f,
@@ -1040,7 +1044,9 @@ static struct android_usb_function *supported_functions[] = {
 	&rndis_function,
 	&mass_storage_function,
 	&accessory_function,
+#ifdef CONFIG_USB_AUDIO
 	&audio_source_function,
+#endif
 	&ecm_function,
 	&hid_function,
 	NULL
