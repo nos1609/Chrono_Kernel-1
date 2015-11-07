@@ -18,6 +18,7 @@
 #include <linux/uaccess.h>
 #include <linux/module.h>
 #include <linux/vmalloc.h>
+#include <linux/memblock.h>
 #include <linux/pasr.h>
 #include <asm/sizes.h>
 
@@ -106,7 +107,7 @@ void *cona_create(const char *name, phys_addr_t region_paddr,
 	if (__phys_to_virt(region_end) > __phys_to_virt(region_paddr)
 	    && __phys_to_virt(region_end) < (unsigned long)high_memory) {
 		instance->region_kaddr = phys_to_virt(region_paddr);
-		pr_info("hwmem: %s map to LOMEM, start: 0x%p, end: 0x%p\n",
+		pr_err("hwmem: %s map to LOMEM, start: 0x%p, end: 0x%p\n",
 			name,
 			phys_to_virt(region_paddr),
 			phys_to_virt(region_paddr+region_size));
@@ -123,9 +124,10 @@ void *cona_create(const char *name, phys_addr_t region_paddr,
 		}
 
 		instance->region_kaddr = vm_area->addr;
-		pr_info("hwmem: %s map to VMALLOC, address: 0x%p\n",
+		pr_err("hwmem: %s map to VMALLOC, address: 0x%p, paddr=0x%p\n",
 			name,
-			instance->region_kaddr);
+			instance->region_kaddr,
+			region_paddr);
 	}
 
 	/*
@@ -158,74 +160,50 @@ vmem_alloc_failed:
 
 	return ERR_PTR(ret);
 }
+void *cona_alloc(void *instance, size_t size) {
+        unsigned long paddr;
+        struct alloc *alloc;
+        if (size == 0)
+                return ERR_PTR(-EINVAL);
 
-void *cona_alloc(void *instance, size_t size)
-{
-	struct instance *instance_l = (struct instance *)instance;
-	struct alloc *alloc;
+        mutex_lock(&lock);
 
-	if (size == 0)
-		return ERR_PTR(-EINVAL);
+        alloc = kzalloc(sizeof(struct alloc *), GFP_KERNEL);
+        if (unlikely(alloc == NULL))
+                goto no_mem;
 
-	mutex_lock(&lock);
+        paddr = memblock_alloc(size, PAGE_SIZE);
+        if (unlikely(paddr == MEMBLOCK_ERROR)) {
+                pr_err("[HWMEM] failed to allocate %d bytes\n", size);
+                goto no_mem;
+        }
 
-	alloc = find_free_alloc_bestfit(instance_l, size);
-	if (IS_ERR(alloc))
-		goto out;
-	if (size < alloc->size) {
-		alloc = split_allocation(alloc, size);
-		if (IS_ERR(alloc))
-			goto out;
-	} else {
-		alloc->in_use = true;
-	}
+        alloc->size = size;
+        alloc->paddr = paddr;
+        alloc->in_use = true;
 
-	pasr_get(alloc->paddr, alloc->size);
+        pr_err("[HWMEM] allocated %d bytes at %p\n", alloc->size, alloc->paddr);
+        mutex_unlock(&lock);
 
-#ifdef CONFIG_DEBUG_FS
-	instance_l->cona_status_max_cont += alloc->size;
-	instance_l->cona_status_max_check =
-					max(instance_l->cona_status_max_check,
-					instance_l->cona_status_max_cont);
-#endif /* #ifdef CONFIG_DEBUG_FS */
+        return alloc; 
 
-out:
-	mutex_unlock(&lock);
-
-	return alloc;
+no_mem:
+        kfree(alloc);
+        mutex_unlock(&lock);
+        return ERR_PTR(-ENOMEM);
 }
 
 void cona_free(void *instance, void *alloc)
 {
-	struct instance *instance_l = (struct instance *)instance;
+	unsigned long mem;
 	struct alloc *alloc_l = (struct alloc *)alloc;
-	struct alloc *other;
 
 	mutex_lock(&lock);
 
-	alloc_l->in_use = false;
+        memblock_free(alloc_l->paddr, alloc_l->size);
+	kfree(&alloc_l);
 
-	pasr_put(alloc_l->paddr, alloc_l->size);
-
-#ifdef CONFIG_DEBUG_FS
-	instance_l->cona_status_max_cont -= alloc_l->size;
-#endif /* #ifdef CONFIG_DEBUG_FS */
-
-	other = list_entry(alloc_l->list.prev, struct alloc, list);
-	if ((alloc_l->list.prev != &instance_l->alloc_list) &&
-							!other->in_use) {
-		other->size += alloc_l->size;
-		list_del(&alloc_l->list);
-		kfree(alloc_l);
-		alloc_l = other;
-	}
-	other = list_entry(alloc_l->list.next, struct alloc, list);
-	if ((alloc_l->list.next != &instance_l->alloc_list) &&
-							!other->in_use) {
-		alloc_l->size += other->size;
-		list_del(&other->list);
-		kfree(other);
-	}
+	pr_err("[HWMEM] freed %d bytes at %p\n", alloc_l->size, alloc_l->paddr);
 
 	mutex_unlock(&lock);
 }
