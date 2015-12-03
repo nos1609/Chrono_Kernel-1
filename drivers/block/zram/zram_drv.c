@@ -35,7 +35,7 @@
 #include <linux/err.h>
 
 
-size_t max_zpage_size = PAGE_SIZE / 10 * 9;
+size_t max_zpage_size = PAGE_SIZE / 8 * 5;
 module_param(max_zpage_size, uint, 0644);
 
 #include "zram_drv.h"
@@ -592,10 +592,10 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 			   int offset)
 {
 	int ret = 0;
-	size_t clen;
+	size_t clen, chunk_clen;
 	unsigned long handle;
 	struct page *page;
-	unsigned char *user_mem, *cmem, *src, *uncmem = NULL;
+	unsigned char *user_mem, *cmem, *src, *uncmem = NULL, page_chunk[PAGE_SIZE / 8];
 	struct zram_meta *meta = zram->meta;
 	static unsigned long zram_rs_time;
 	struct zcomp_strm *zstrm;
@@ -645,7 +645,15 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 		goto out;
 	}
 
-	ret = zcomp_compress(zram->comp, zstrm, uncmem, &clen);
+	memcpy(page_chunk, uncmem, PAGE_SIZE / 8);
+	ret = zcomp_compress(zram->comp, zstrm, page_chunk, &chunk_clen);
+
+	if (likely(chunk_clen * 8 <= max_zpage_size)) {
+		ret = zcomp_compress(zram->comp, zstrm, uncmem, &clen);
+	} else {
+		clen = PAGE_SIZE;
+	}
+
 	if (!is_partial_io(bvec)) {
 		kunmap_atomic(user_mem);
 		user_mem = NULL;
@@ -656,6 +664,7 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 		pr_err("Compression failed! err=%d\n", ret);
 		goto out;
 	}
+
 	src = zstrm->buffer;
 	if (unlikely(clen > max_zpage_size)) {
 		clen = PAGE_SIZE;
