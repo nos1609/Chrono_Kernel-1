@@ -315,6 +315,14 @@ static inline void __FD_ZERO(__kernel_fd_set *__fdsetp)
 
 #endif /* __KERNEL__ */
 
+#define NFDBITS			__NFDBITS
+
+#define FD_SETSIZE		__FD_SETSIZE
+#define FD_SET(fd,fdsetp)	__FD_SET(fd,fdsetp)
+#define FD_CLR(fd,fdsetp)	__FD_CLR(fd,fdsetp)
+#define FD_ISSET(fd,fdsetp)	__FD_ISSET(fd,fdsetp)
+#define FD_ZERO(fdsetp)		__FD_ZERO(fdsetp)
+
 /*
  * Names of the interval timers, and structure
  * defining a timer setting:
